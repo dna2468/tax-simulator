@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026-2027年 税金シミュレーター (令和8年対応版)</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+JP:wght@300;400;500;600;700;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.292.0"
+        }
+    }
+    </script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans JP', 'Inter', 'sans-serif'],
+                        display: ['Outfit', 'Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'SF Mono', 'Consolas', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+        details summary::-webkit-details-marker { display: none; }
+        details summary { list-style: none; }
+    </style>
+</head>
+<body class="bg-neutral-50 text-neutral-900 antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { ChevronDown } from 'lucide-react';
+
+        const App = () => {
+            // --- 収入 ---
+            const [salary, setSalary] = useState(6000000);
+            const [dividendIncome, setDividendIncome] = useState(0);
+            const [businessIncome, setBusinessIncome] = useState(0);
+            const [miscIncome, setMiscIncome] = useState(0);
+
+            // --- 基本情報 ---
+            const [age, setAge] = useState(30);
+            const [socialInsuranceManual, setSocialInsuranceManual] = useState(null);
+            const [isSocialManual, setIsSocialManual] = useState(false);
+
+            // --- 配偶者 ---
+            const [spouse, setSpouse] = useState('none'); // none, general, elderly
+            const [spouseIncome, setSpouseIncome] = useState(0);
+
+            // --- 扶養 ---
+            const [childrenGeneral, setChildrenGeneral] = useState(0);   // 一般扶養 (16-18, 23-69)
+            const [childrenStudent, setChildrenStudent] = useState(0);   // 特定扶養 (19-22)
+            const [children, setChildren] = useState(0);                 // 16歳未満
+            const [elderlyDependentCohabit, setElderlyDependentCohabit] = useState(0);   // 老人扶養（同居）
+            const [elderlyDependentOther, setElderlyDependentOther] = useState(0);       // 老人扶養（非同居）
+
+            // --- 各種所得控除 ---
+            const [ideco, setIdeco] = useState(0);
+            const [lifeInsurance, setLifeInsurance] = useState(0);
+            const [earthquakeInsurance, setEarthquakeInsurance] = useState(0);
+            const [medicalExpense, setMedicalExpense] = useState(0);       // 医療費（年間支払額）
+            const [casualtyLoss, setCasualtyLoss] = useState(0);           // 雑損控除額（算出済み）
+            const [donationAmount, setDonationAmount] = useState(0);       // 寄附金額（ふるさと納税等）
+
+            // --- 人的控除フラグ ---
+            const [isSingleParent, setIsSingleParent] = useState(false);   // ひとり親控除
+            const [isWidow, setIsWidow] = useState(false);                 // 寡婦控除
+            const [isWorkingStudent, setIsWorkingStudent] = useState(false); // 勤労学生控除
+            const [disabilityType, setDisabilityType] = useState('none');   // none, general, special, specialCohabit
+
+            // --- 税額控除 ---
+            const [housingLoanCredit, setHousingLoanCredit] = useState(0); // 住宅ローン控除額
+
+            // --- 基礎控除設定 ---
+            const [deductionMode, setDeductionMode] = useState('current');
+            const [basicDeductionManualIncome, setBasicDeductionManualIncome] = useState(580000);
+            const [basicDeductionManualResident, setBasicDeductionManualResident] = useState(530000);
+
+            const presets = {
+                current: { label: '令和8年分 現行法 (2026年)', income: 580000, resident: 530000 },
+                manual: { label: 'カスタム設定', income: 580000, resident: 530000 }
+            };
+
+            const handleModeChange = (mode) => {
+                setDeductionMode(mode);
+                if (mode !== 'manual') {
+                    setBasicDeductionManualIncome(presets[mode].income);
+                    setBasicDeductionManualResident(presets[mode].resident);
+                }
+            };
+
+            // ========================================
+            // Calculation Logic
+            // ========================================
+
+            // 給与所得控除
+            const calcSalaryDeduction = (g) => {
+                if (g < 650000) return g; // 全額控除で所得0
+                if (g <= 1900000) return 650000;
+                if (g <= 3600000) return g * 0.3 + 80000;
+                if (g <= 6600000) return g * 0.2 + 440000;
+                if (g <= 8500000) return g * 0.1 + 1100000;
+                return 1950000;
+            };
+
+            // 所得金額調整控除
+            const calcIncomeAdjustment = (g) => {
+                if (g <= 8500000) return 0;
+                const hasDep = (children + childrenGeneral + childrenStudent + elderlyDependentCohabit + elderlyDependentOther) > 0;
+                const hasDisability = disabilityType !== 'none';
+                if (!hasDep && !hasDisability) return 0;
+                return (Math.min(g, 10000000) - 8500000) * 0.1;
+            };
+
+            const salaryDeduction = calcSalaryDeduction(salary);
+            const salaryIncomeRaw = Math.max(0, salary - salaryDeduction);
+            const incomeAdjustment = calcIncomeAdjustment(salary);
+            const salaryIncome = Math.max(0, salaryIncomeRaw - incomeAdjustment);
+            const totalIncome = salaryIncome + dividendIncome + businessIncome + miscIncome;
+
+            // 社会保険料
+            const calcSocialInsurance = () => {
+                if (isSocialManual && socialInsuranceManual !== null) return parseInt(socialInsuranceManual);
+                const pensionRate = 0.0915;
+                const healthRate = (age >= 40 && age < 65) ? 0.067 : 0.05;
+                const employmentRate = 0.006;
+                return Math.floor(
+                    Math.min(salary * pensionRate, 750000) +
+                    Math.min(salary * healthRate, 1000000) +
+                    salary * employmentRate
+                );
+            };
+            const socialInsurance = calcSocialInsurance();
+
+            // 基礎控除
+            const calcBasicDeduction = (income, isResident) => {
+                if (deductionMode === 'manual') return isResident ? basicDeductionManualResident : basicDeductionManualIncome;
+                const diff = isResident ? 50000 : 0;
+                if (income <= 1320000) return 950000 - diff;
+                if (income <= 3360000) return 880000 - diff;
+                if (income <= 4890000) return 680000 - diff;
+                if (income <= 6550000) return 630000 - diff;
+                if (income <= 23500000) return 580000 - diff;
+                if (income <= 24000000) return 480000 - diff;
+                if (income <= 24500000) return 320000 - diff + (isResident ? 20000 : 0);
+                if (income <= 25000000) return 160000 - diff + (isResident ? 40000 : 0);
+                return 0;
+            };
+
+            // 配偶者の合計所得
+            const calcSpouseIncome = () => {
+                if (spouse === 'none') return 0;
+                const s = spouseIncome;
+                return Math.max(0, s - calcSalaryDeduction(s));
+            };
+            const spouseTotalIncome = calcSpouseIncome();
+
+            // 配偶者控除・配偶者特別控除
+            const calcSpouseDeduction = (isResident) => {
+                if (spouse === 'none' || totalIncome > 10000000) return 0;
+                const si = spouseTotalIncome;
+                const isE = spouse === 'elderly';
+                if (si <= 480000) {
+                    const b = isResident
+                        ? (isE ? [380000, 260000, 130000] : [330000, 220000, 110000])
+                        : (isE ? [480000, 320000, 160000] : [380000, 260000, 130000]);
+                    return totalIncome <= 9000000 ? b[0] : totalIncome <= 9500000 ? b[1] : b[2];
+                }
+                if (si > 1330000) return 0;
+                const tbl = isResident ? [
+                    [950000,330000,220000,110000],[1000000,330000,220000,110000],
+                    [1050000,310000,210000,110000],[1100000,260000,180000,90000],
+                    [1150000,210000,140000,70000],[1200000,160000,110000,60000],
+                    [1250000,110000,80000,40000],[1300000,60000,40000,20000],
+                    [1330000,30000,20000,10000],
+                ] : [
+                    [950000,380000,260000,130000],[1000000,360000,240000,120000],
+                    [1050000,310000,210000,110000],[1100000,260000,180000,90000],
+                    [1150000,210000,140000,70000],[1200000,160000,110000,60000],
+                    [1250000,110000,80000,40000],[1300000,60000,40000,20000],
+                    [1330000,30000,20000,10000],
+                ];
+                const col = totalIncome <= 9000000 ? 1 : totalIncome <= 9500000 ? 2 : 3;
+                for (const r of tbl) { if (si <= r[0]) return r[col]; }
+                return 0;
+            };
+
+            // 扶養控除
+            const calcDependentDeduction = (isResident) => {
+                let d = 0;
+                d += childrenGeneral * (isResident ? 330000 : 380000);
+                d += childrenStudent * (isResident ? 450000 : 630000);
+                d += elderlyDependentCohabit * (isResident ? 450000 : 580000);
+                d += elderlyDependentOther * (isResident ? 380000 : 480000);
+                return d;
+            };
+
+            // 障害者控除
+            const calcDisabilityDeduction = (isResident) => {
+                if (disabilityType === 'none') return 0;
+                if (disabilityType === 'general') return isResident ? 260000 : 270000;
+                if (disabilityType === 'special') return isResident ? 300000 : 400000;
+                if (disabilityType === 'specialCohabit') return isResident ? 530000 : 750000;
+                return 0;
+            };
+
+            // ひとり親控除・寡婦控除
+            const calcSingleParentWidow = (isResident) => {
+                if (isSingleParent) return isResident ? 300000 : 350000;
+                if (isWidow) return isResident ? 260000 : 270000;
+                return 0;
+            };
+
+            // 勤労学生控除
+            const calcWorkingStudent = (isResident) => {
+                if (!isWorkingStudent) return 0;
+                return isResident ? 260000 : 270000;
+            };
+
+            // 医療費控除
+            const calcMedicalDeduction = () => {
+                if (medicalExpense <= 0) return 0;
+                const threshold = Math.min(totalIncome * 0.05, 100000);
+                return Math.min(Math.max(0, medicalExpense - threshold), 2000000);
+            };
+
+            // 寄附金控除（所得控除）
+            const calcDonationDeduction = () => {
+                if (donationAmount <= 0) return 0;
+                return Math.max(0, Math.min(donationAmount, totalIncome * 0.4) - 2000);
+            };
+
+            const medicalDeduction = calcMedicalDeduction();
+            const donationDeduction = calcDonationDeduction();
+
+            // --- 所得控除合計 ---
+            const calcTotalDeduction = (isResident) => {
+                return socialInsurance
+                    + calcBasicDeduction(totalIncome, isResident)
+                    + calcSpouseDeduction(isResident)
+                    + calcDependentDeduction(isResident)
+                    + calcDisabilityDeduction(isResident)
+                    + calcSingleParentWidow(isResident)
+                    + calcWorkingStudent(isResident)
+                    + ideco + lifeInsurance + earthquakeInsurance
+                    + medicalDeduction
+                    + casualtyLoss
+                    + donationDeduction;
+            };
+
+            const basicDeductionIncome = calcBasicDeduction(totalIncome, false);
+            const basicDeductionResident = calcBasicDeduction(totalIncome, true);
+            const spouseDeductionIncome = calcSpouseDeduction(false);
+            const spouseDeductionResident = calcSpouseDeduction(true);
+            const dependentDeductionIncome = calcDependentDeduction(false);
+            const dependentDeductionResident = calcDependentDeduction(true);
+            const disabilityDeductionIncome = calcDisabilityDeduction(false);
+            const disabilityDeductionResident = calcDisabilityDeduction(true);
+            const singleParentWidowIncome = calcSingleParentWidow(false);
+            const singleParentWidowResident = calcSingleParentWidow(true);
+            const workingStudentIncome = calcWorkingStudent(false);
+            const workingStudentResident = calcWorkingStudent(true);
+
+            const totalDeductionIncome = calcTotalDeduction(false);
+            const totalDeductionResident = calcTotalDeduction(true);
+
+            const taxableIncomeIncomeTax = Math.max(0, Math.floor((totalIncome - totalDeductionIncome) / 1000) * 1000);
+            const taxableIncomeResidentTax = Math.max(0, Math.floor((totalIncome - totalDeductionResident) / 1000) * 1000);
+
+            // --- 税率 ---
+            const getRate = (t) => { if(t<=1950000)return .05;if(t<=3300000)return .1;if(t<=6950000)return .2;if(t<=9000000)return .23;if(t<=18000000)return .33;if(t<=40000000)return .4;return .45; };
+            const getDeduction = (t) => { if(t<=1950000)return 0;if(t<=3300000)return 97500;if(t<=6950000)return 427500;if(t<=9000000)return 636000;if(t<=18000000)return 1536000;if(t<=40000000)return 2796000;return 4796000; };
+            const calcTaxBase = (t) => { if(t<=1950000)return t*.05;if(t<=3300000)return t*.1-97500;if(t<=6950000)return t*.2-427500;if(t<=9000000)return t*.23-636000;if(t<=18000000)return t*.33-1536000;if(t<=40000000)return t*.4-2796000;return t*.45-4796000; };
+
+            const calcDivDeduction = (div, taxable, r10, r5) => {
+                if (div <= 0) return 0;
+                if (taxable <= 10000000) return div * r10;
+                const o = Math.max(0, taxable - div);
+                if (o >= 10000000) return div * r5;
+                const u = 10000000 - o;
+                return u * r10 + (div - u) * r5;
+            };
+
+            const incomeTaxRate = getRate(taxableIncomeIncomeTax);
+            const incomeTaxDeduction = getDeduction(taxableIncomeIncomeTax);
+            const incomeTaxBase = calcTaxBase(taxableIncomeIncomeTax);
+            const divDeductionIncome = calcDivDeduction(dividendIncome, taxableIncomeIncomeTax, 0.10, 0.05);
+
+            let standardIncomeTax = Math.max(0, incomeTaxBase - divDeductionIncome);
+            let reconstructionTax = Math.floor(standardIncomeTax * 0.021);
+
+            // 住宅ローン控除（所得税から控除）
+            let incomeTaxAfterHousing = Math.max(0, standardIncomeTax + reconstructionTax - housingLoanCredit);
+            let finalIncomeTax = Math.floor(incomeTaxAfterHousing / 100) * 100;
+
+            // 住宅ローン控除の所得税で引ききれなかった分 → 住民税から控除（上限あり）
+            const housingLoanUsedIncome = Math.min(housingLoanCredit, standardIncomeTax + reconstructionTax);
+            const housingLoanRemainder = housingLoanCredit - housingLoanUsedIncome;
+            const housingLoanResidentMax = Math.min(taxableIncomeIncomeTax * 0.05, 97500);
+            const housingLoanResidentCredit = Math.min(housingLoanRemainder, housingLoanResidentMax);
+
+            const residentTaxRateBase = taxableIncomeResidentTax * 0.10;
+            const divDeductionResident = calcDivDeduction(dividendIncome, taxableIncomeResidentTax, 0.028, 0.014);
+            let residentIncomeBased = Math.max(0, residentTaxRateBase - divDeductionResident);
+            let adjustmentDeduction = totalIncome > 25000000 ? 0 : 2500;
+            residentIncomeBased = Math.max(0, residentIncomeBased - adjustmentDeduction);
+
+            // 住民税から住宅ローン控除
+            residentIncomeBased = Math.max(0, residentIncomeBased - housingLoanResidentCredit);
+
+            const perCapitaTax = 5000;
+            let finalResidentTax = residentIncomeBased + perCapitaTax;
+
+            const totalGross = salary + dividendIncome + businessIncome + miscIncome;
+            const takeHome = totalGross - socialInsurance - finalIncomeTax - finalResidentTax;
+            const totalTaxBurden = socialInsurance + finalIncomeTax + finalResidentTax;
+            const burdenRate = totalGross > 0 ? ((totalTaxBurden / totalGross) * 100).toFixed(1) : 0;
+
+            // ふるさと納税上限
+            const calcFurusatoLimit = () => {
+                const r = getRate(taxableIncomeIncomeTax);
+                const d = 0.9 - (r * 1.021);
+                if (d <= 0) return 0;
+                // 住宅ローン控除後の所得割額を使用
+                return Math.floor(((residentIncomeBased * 0.2) / d + 2000) / 1000) * 1000;
+            };
+            const furusatoLimit = calcFurusatoLimit();
+
+            // --- Utilities ---
+            const fmtYen = (n) => new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(n);
+            const fmtNum = (n) => n.toLocaleString();
+            const onNumeric = (setter) => (e) => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setter(Number(v)); };
+            const onNumber = (setter) => (e) => { const v = e.target.value; setter(v === '' ? 0 : Number(v)); };
+
+            // --- UI Components ---
+            const Input = ({ label, value, onChange, sub, type = 'text' }) => (
+                <div className="space-y-1.5">
+                    <label className="block text-xs font-medium tracking-wide text-neutral-500 uppercase">{label}</label>
+                    {type === 'text' ? (
+                        <input type="text" inputMode="numeric" value={fmtNum(value)} onChange={onNumeric(onChange)}
+                            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg text-lg font-mono focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-colors" />
+                    ) : (
+                        <input type="number" min="0" value={value} onChange={onNumber(onChange)}
+                            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg font-mono focus:outline-none focus:border-neutral-900 transition-colors" />
+                    )}
+                    {sub && <p className="text-[11px] text-neutral-400">{sub}</p>}
+                </div>
+            );
+
+            const Select = ({ label, value, onChange, options, sub }) => (
+                <div className="space-y-1.5">
+                    <label className="block text-xs font-medium tracking-wide text-neutral-500 uppercase">{label}</label>
+                    <select value={value} onChange={(e) => onChange(e.target.value)}
+                        className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg text-sm focus:outline-none focus:border-neutral-900 transition-colors">
+                        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    {sub && <p className="text-[11px] text-neutral-400">{sub}</p>}
+                </div>
+            );
+
+            const Toggle = ({ label, checked, onChange, sub }) => (
+                <div className="flex items-start gap-3 py-2">
+                    <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)}
+                        className="w-4 h-4 mt-0.5 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900" />
+                    <div>
+                        <span className="text-sm text-neutral-700">{label}</span>
+                        {sub && <p className="text-[11px] text-neutral-400 mt-0.5">{sub}</p>}
+                    </div>
+                </div>
+            );
+
+            const Row = ({ label, value, bold, border, sub, dim }) => (
+                <div className={`flex justify-between items-baseline py-1.5 ${border ? 'border-t border-neutral-200 mt-1 pt-2' : ''}`}>
+                    <span className={`${bold ? 'font-semibold text-neutral-900' : 'text-neutral-500'} ${sub ? 'text-xs pl-3' : 'text-sm'}`}>{label}</span>
+                    <span className={`font-mono text-sm ${bold ? 'font-bold text-neutral-900' : ''} ${dim ? 'text-neutral-400' : ''}`}>{value}</span>
+                </div>
+            );
+
+            // 控除内訳で0でないものだけ表示するヘルパー
+            const DeductionRow = ({ label, value, isResident }) => {
+                if (value <= 0) return null;
+                return <Row label={label} value={fmtYen(value)} sub />;
+            };
+
+            return (
+                <div className="min-h-screen p-4 md:p-8 lg:p-12">
+                    <div className="max-w-5xl mx-auto">
+                        <header className="mb-12 md:mb-16">
+                            <p className="text-xs font-semibold tracking-[0.25em] text-neutral-400 uppercase mb-2 font-display">Tax Simulator</p>
+                            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-neutral-900 mb-1 font-display">税金シミュレーター</h1>
+                            <p className="text-sm text-neutral-400 font-display tracking-wide">令和8年分 (2026-2027年) 対応</p>
+                        </header>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+                            {/* === Input Column === */}
+                            <div className="lg:col-span-7 space-y-10">
+
+                                {/* 計算ルール */}
+                                <section>
+                                    <div className="flex items-baseline gap-3 mb-4">
+                                        <h2 className="text-lg font-bold tracking-tight">計算ルール</h2>
+                                        <span className="text-xs text-neutral-400">令和7年改正を継続適用</span>
+                                    </div>
+                                    <select value={deductionMode} onChange={(e) => handleModeChange(e.target.value)}
+                                        className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg text-sm font-medium focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-colors">
+                                        <option value="current">{presets.current.label}</option>
+                                        <option value="manual">{presets.manual.label}</option>
+                                    </select>
+                                    {deductionMode === 'current' && (
+                                        <p className="mt-3 text-xs text-neutral-400">基礎控除 58万円 / 給与所得控除 最低65万円 / 低所得者上乗せ措置（最大95万円）</p>
+                                    )}
+                                    {deductionMode === 'manual' && (
+                                        <div className="grid grid-cols-2 gap-4 mt-4">
+                                            <Input label="所得税 基礎控除" value={basicDeductionManualIncome} onChange={setBasicDeductionManualIncome} />
+                                            <Input label="住民税 基礎控除" value={basicDeductionManualResident} onChange={setBasicDeductionManualResident} />
+                                        </div>
+                                    )}
+                                </section>
+
+                                {/* 収入 */}
+                                <section>
+                                    <h2 className="text-lg font-bold tracking-tight mb-6">収入</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                                        <Input label="給与収入（年収）" value={salary} onChange={setSalary} />
+                                        <Input label="配当所得（総合課税）" value={dividendIncome} onChange={setDividendIncome} />
+                                        <Input label="事業・不動産所得" value={businessIncome} onChange={setBusinessIncome} sub="経費差引後の所得金額" />
+                                        <Input label="雑所得・一時所得等" value={miscIncome} onChange={setMiscIncome} />
+                                    </div>
+                                </section>
+
+                                {/* 基本情報 */}
+                                <section>
+                                    <h2 className="text-lg font-bold tracking-tight mb-6">基本情報</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                                        <Input label="年齢" value={age} onChange={setAge} type="number" />
+                                        <div className="space-y-1.5">
+                                            <div className="flex justify-between items-center">
+                                                <label className="block text-xs font-medium tracking-wide text-neutral-500 uppercase">社会保険料</label>
+                                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                                    <input type="checkbox" checked={isSocialManual} onChange={(e) => setIsSocialManual(e.target.checked)} className="w-3.5 h-3.5 rounded border-neutral-300" />
+                                                    <span className="text-[11px] text-neutral-400">手入力</span>
+                                                </label>
+                                            </div>
+                                            {isSocialManual ? (
+                                                <input type="number" value={socialInsuranceManual || ''} onChange={onNumber(setSocialInsuranceManual)}
+                                                    className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg font-mono text-lg focus:outline-none focus:border-neutral-900 transition-colors" placeholder="年間支払額" />
+                                            ) : (
+                                                <div className="w-full px-4 py-3 bg-neutral-100 rounded-lg font-mono text-lg text-neutral-500">{fmtYen(socialInsurance)}</div>
+                                            )}
+                                            {!isSocialManual && <p className="text-[11px] text-neutral-400">給与から自動算出・年間上限反映（事業所得等がある場合は国保のため手入力推奨）</p>}
+                                        </div>
+                                    </div>
+                                </section>
+
+                                {/* 扶養・配偶者 */}
+                                <section>
+                                    <details className="group" open>
+                                        <summary className="flex items-center justify-between cursor-pointer mb-6">
+                                            <h2 className="text-lg font-bold tracking-tight">扶養・配偶者</h2>
+                                            <ChevronDown className="w-5 h-5 text-neutral-400 transition-transform group-open:rotate-180" />
+                                        </summary>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                                            <Select label="配偶者" value={spouse} onChange={setSpouse} options={[
+                                                { value: 'none', label: 'なし' },
+                                                { value: 'general', label: 'あり（69歳以下）' },
+                                                { value: 'elderly', label: 'あり（70歳以上）' },
+                                            ]} sub="本人の合計所得1,000万円超で適用外" />
+                                            {spouse !== 'none' && (
+                                                <Input label="配偶者の給与収入" value={spouseIncome} onChange={setSpouseIncome}
+                                                    sub={(spouseTotalIncome <= 480000 ? '配偶者控除対象（合計所得48万以下）' :
+                                                         spouseTotalIncome <= 1330000 ? `配偶者特別控除対象（合計所得 ${fmtYen(spouseTotalIncome)}）` :
+                                                         '控除対象外（合計所得133万超）') + '　※給与収入のみの場合'} />
+                                            )}
+                                            <Input label="一般扶養 (16-18, 23-69歳)" value={childrenGeneral} onChange={setChildrenGeneral} type="number" />
+                                            <Input label="特定扶養 (19-22歳)" value={childrenStudent} onChange={setChildrenStudent} type="number" />
+                                            <Input label="16歳未満の子供" value={children} onChange={setChildren} type="number" sub="扶養控除なし・調整控除の判定に使用" />
+                                            <Input label="老人扶養（同居）" value={elderlyDependentCohabit} onChange={setElderlyDependentCohabit} type="number" sub="所得税58万・住民税45万" />
+                                            <Input label="老人扶養（非同居）" value={elderlyDependentOther} onChange={setElderlyDependentOther} type="number" sub="所得税48万・住民税38万" />
+                                        </div>
+                                    </details>
+                                </section>
+
+                                {/* 人的控除 */}
+                                <section>
+                                    <details className="group">
+                                        <summary className="flex items-center justify-between cursor-pointer mb-6">
+                                            <h2 className="text-lg font-bold tracking-tight">人的控除</h2>
+                                            <ChevronDown className="w-5 h-5 text-neutral-400 transition-transform group-open:rotate-180" />
+                                        </summary>
+                                        <div className="space-y-2">
+                                            <Select label="障害者控除" value={disabilityType} onChange={setDisabilityType} options={[
+                                                { value: 'none', label: 'なし' },
+                                                { value: 'general', label: '一般障害者（27万円）' },
+                                                { value: 'special', label: '特別障害者（40万円）' },
+                                                { value: 'specialCohabit', label: '同居特別障害者（75万円）' },
+                                            ]} />
+                                            <Toggle label="ひとり親控除（35万円）" checked={isSingleParent} onChange={(v) => { setIsSingleParent(v); if(v) setIsWidow(false); }}
+                                                sub="未婚・離婚・死別で子を扶養する場合" />
+                                            <Toggle label="寡婦控除（27万円）" checked={isWidow} onChange={(v) => { setIsWidow(v); if(v) setIsSingleParent(false); }}
+                                                sub="ひとり親控除に該当しない寡婦の場合" />
+                                            <Toggle label="勤労学生控除（27万円）" checked={isWorkingStudent} onChange={setIsWorkingStudent}
+                                                sub="合計所得75万以下の学生が対象" />
+                                        </div>
+                                    </details>
+                                </section>
+
+                                {/* その他控除 */}
+                                <section>
+                                    <details className="group">
+                                        <summary className="flex items-center justify-between cursor-pointer mb-6">
+                                            <h2 className="text-lg font-bold tracking-tight">その他の控除</h2>
+                                            <ChevronDown className="w-5 h-5 text-neutral-400 transition-transform group-open:rotate-180" />
+                                        </summary>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                                            <Input label="iDeCo・小規模企業共済" value={ideco} onChange={setIdeco} />
+                                            <Input label="生命保険料控除" value={lifeInsurance} onChange={setLifeInsurance} sub="算出済みの控除額を入力（上限: 新制度12万円 / 旧制度10万円）" />
+                                            <Input label="地震保険料控除" value={earthquakeInsurance} onChange={setEarthquakeInsurance} />
+                                            <Input label="医療費（年間支払額）" value={medicalExpense} onChange={setMedicalExpense}
+                                                sub={medicalDeduction > 0 ? `控除額: ${fmtYen(medicalDeduction)}（10万円 or 所得5%超過分）※保険金等で補填された額は差し引いて入力` : '保険金等で補填された額を差し引いた自己負担額を入力'} />
+                                            <Input label="雑損控除額" value={casualtyLoss} onChange={setCasualtyLoss} sub="災害・盗難等の損失に対する控除（算出済み額）" />
+                                            <Input label="寄附金額（ふるさと納税等）" value={donationAmount} onChange={setDonationAmount}
+                                                sub={donationDeduction > 0 ? `所得控除額: ${fmtYen(donationDeduction)}` : '2,000円を超える部分が所得控除'} />
+                                        </div>
+                                    </details>
+                                </section>
+
+                                {/* 税額控除 */}
+                                <section>
+                                    <details className="group">
+                                        <summary className="flex items-center justify-between cursor-pointer mb-6">
+                                            <h2 className="text-lg font-bold tracking-tight">税額控除</h2>
+                                            <ChevronDown className="w-5 h-5 text-neutral-400 transition-transform group-open:rotate-180" />
+                                        </summary>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                                            <Input label="住宅ローン控除額" value={housingLoanCredit} onChange={setHousingLoanCredit}
+                                                sub="所得税から控除、引ききれない分は住民税から控除（上限あり）" />
+                                        </div>
+                                    </details>
+                                </section>
+                            </div>
+
+                            {/* === Result Column === */}
+                            <div className="lg:col-span-5 space-y-8">
+                                <div className="lg:sticky lg:top-8 space-y-8">
+
+                                    {/* 手取り */}
+                                    <section className="bg-neutral-900 text-white rounded-2xl p-8">
+                                        <p className="text-xs font-semibold tracking-[0.2em] text-neutral-400 uppercase mb-1 font-display">Take-home Pay</p>
+                                        <h3 className="text-sm font-medium text-neutral-300 mb-4">手取り年収（概算）</h3>
+                                        <div className="text-4xl md:text-5xl font-bold tracking-tighter font-mono mb-2">{fmtYen(takeHome)}</div>
+                                        <div className="text-neutral-500 text-sm font-mono">月額 {fmtYen(Math.round(takeHome / 12))}</div>
+                                    </section>
+
+                                    {/* ふるさと納税 */}
+                                    <section className="border border-neutral-200 rounded-2xl p-8">
+                                        <p className="text-xs font-semibold tracking-[0.2em] text-neutral-400 uppercase mb-1 font-display">Furusato Tax</p>
+                                        <h3 className="text-sm font-medium text-neutral-500 mb-4">ふるさと納税 限度額目安</h3>
+                                        <div className="text-3xl md:text-4xl font-bold tracking-tighter font-mono mb-2">{fmtYen(furusatoLimit)}</div>
+                                        <p className="text-xs text-neutral-400">自己負担2,000円で済む上限の目安</p>
+                                    </section>
+
+                                    {/* 内訳 */}
+                                    <section className="border border-neutral-200 rounded-2xl p-8">
+                                        <p className="text-xs font-semibold tracking-[0.2em] text-neutral-400 uppercase mb-1 font-display">Breakdown</p>
+                                        <h3 className="text-sm font-medium text-neutral-500 mb-6">税金・社会保険料</h3>
+                                        <Row label="社会保険料" value={fmtYen(socialInsurance)} />
+                                        <Row label="所得税" value={fmtYen(finalIncomeTax)} />
+                                        <Row label="住民税" value={fmtYen(finalResidentTax)} />
+                                        <Row label="負担合計" value={fmtYen(totalTaxBurden)} bold border />
+                                        <Row label="負担率" value={`${burdenRate}%`} bold />
+                                    </section>
+
+                                    {/* 計算詳細 */}
+                                    <section className="border border-neutral-200 rounded-2xl overflow-hidden">
+                                        <details className="group">
+                                            <summary className="flex items-center justify-between cursor-pointer p-8 hover:bg-neutral-50 transition-colors">
+                                                <div>
+                                                    <p className="text-xs font-semibold tracking-[0.2em] text-neutral-400 uppercase mb-1 font-display">Details</p>
+                                                    <h3 className="text-sm font-medium text-neutral-500">計算根拠・詳細プロセス</h3>
+                                                </div>
+                                                <ChevronDown className="w-5 h-5 text-neutral-400 transition-transform group-open:rotate-180" />
+                                            </summary>
+                                            <div className="px-8 pb-8 space-y-8 border-t border-neutral-100">
+                                                {/* Step 1 */}
+                                                <div className="pt-6">
+                                                    <h4 className="text-sm font-bold tracking-wide text-neutral-700 uppercase mb-4 font-display">Step 1 &mdash; 所得の計算</h4>
+                                                    <Row label="給与収入" value={fmtYen(salary)} />
+                                                    <Row label="給与所得控除 + 調整控除" value={`-${fmtYen(salary - salaryIncome)}`} sub dim />
+                                                    <Row label="給与所得" value={fmtYen(salaryIncome)} />
+                                                    {(dividendIncome > 0 || businessIncome > 0 || miscIncome > 0) && (
+                                                        <Row label="他所得計" value={fmtYen(dividendIncome + businessIncome + miscIncome)} />
+                                                    )}
+                                                    <Row label="総所得金額" value={fmtYen(totalIncome)} bold border />
+                                                </div>
+
+                                                {/* Step 2 */}
+                                                <div>
+                                                    <h4 className="text-sm font-bold tracking-wide text-neutral-700 uppercase mb-4 font-display">Step 2 &mdash; 所得控除</h4>
+                                                    {[{ title: '所得税', basic: basicDeductionIncome, sp: spouseDeductionIncome, dep: dependentDeductionIncome, dis: disabilityDeductionIncome, spw: singleParentWidowIncome, ws: workingStudentIncome, total: totalDeductionIncome, taxable: taxableIncomeIncomeTax },
+                                                      { title: '住民税', basic: basicDeductionResident, sp: spouseDeductionResident, dep: dependentDeductionResident, dis: disabilityDeductionResident, spw: singleParentWidowResident, ws: workingStudentResident, total: totalDeductionResident, taxable: taxableIncomeResidentTax }
+                                                    ].map(({ title, basic, sp, dep, dis, spw, ws, total, taxable }) => (
+                                                        <div key={title} className="mb-4">
+                                                            <p className="text-xs font-semibold text-neutral-700 mb-2">{title}</p>
+                                                            <DeductionRow label="基礎控除" value={basic} />
+                                                            <DeductionRow label="社会保険料" value={socialInsurance} />
+                                                            <DeductionRow label="配偶者控除・特別控除" value={sp} />
+                                                            <DeductionRow label="扶養控除" value={dep} />
+                                                            <DeductionRow label="障害者控除" value={dis} />
+                                                            <DeductionRow label="ひとり親・寡婦控除" value={spw} />
+                                                            <DeductionRow label="勤労学生控除" value={ws} />
+                                                            <DeductionRow label="iDeCo等" value={ideco} />
+                                                            <DeductionRow label="生命保険料控除" value={lifeInsurance} />
+                                                            <DeductionRow label="地震保険料控除" value={earthquakeInsurance} />
+                                                            <DeductionRow label="医療費控除" value={medicalDeduction} />
+                                                            <DeductionRow label="雑損控除" value={casualtyLoss} />
+                                                            <DeductionRow label="寄附金控除" value={donationDeduction} />
+                                                            <Row label="控除合計" value={`-${fmtYen(total)}`} sub dim />
+                                                            <Row label="課税所得金額" value={fmtYen(taxable)} bold border />
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {/* Step 3 */}
+                                                <div>
+                                                    <h4 className="text-sm font-bold tracking-wide text-neutral-700 uppercase mb-4 font-display">Step 3 &mdash; 税額計算</h4>
+                                                    <div className="mb-4">
+                                                        <p className="text-xs font-semibold text-neutral-700 mb-2">所得税</p>
+                                                        <div className="flex items-center gap-1.5 text-xs font-mono text-neutral-500 mb-1 pl-3">
+                                                            <span>{fmtYen(taxableIncomeIncomeTax)}</span><span>x</span>
+                                                            <span className="font-semibold text-neutral-700">{Math.round(incomeTaxRate * 100)}%</span>
+                                                            <span>-</span><span>{fmtYen(incomeTaxDeduction)}</span>
+                                                        </div>
+                                                        {dividendIncome > 0 && <Row label="配当控除" value={`-${fmtYen(divDeductionIncome)}`} sub dim />}
+                                                        <Row label="基準所得税額" value={fmtYen(standardIncomeTax)} sub />
+                                                        <Row label="復興特別所得税 (2.1%)" value={`+${fmtYen(reconstructionTax)}`} sub />
+                                                        {housingLoanCredit > 0 && <Row label="住宅ローン控除" value={`-${fmtYen(housingLoanUsedIncome)}`} sub dim />}
+                                                        <Row label="申告所得税額" value={fmtYen(finalIncomeTax)} bold border />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-neutral-700 mb-2">住民税</p>
+                                                        <div className="flex items-center gap-1.5 text-xs font-mono text-neutral-500 mb-1 pl-3">
+                                                            <span>{fmtYen(taxableIncomeResidentTax)}</span><span>x</span>
+                                                            <span className="font-semibold text-neutral-700">10%</span>
+                                                        </div>
+                                                        {dividendIncome > 0 && <Row label="配当控除" value={`-${fmtYen(divDeductionResident)}`} sub dim />}
+                                                        <Row label="調整控除" value={`-${fmtYen(adjustmentDeduction)}`} sub dim />
+                                                        {housingLoanResidentCredit > 0 && <Row label="住宅ローン控除" value={`-${fmtYen(housingLoanResidentCredit)}`} sub dim />}
+                                                        <Row label="所得割額" value={fmtYen(residentIncomeBased)} sub />
+                                                        <Row label="均等割額" value={`+${fmtYen(perCapitaTax)}`} sub />
+                                                        <Row label="住民税額" value={fmtYen(finalResidentTax)} bold border />
+                                                    </div>
+                                                </div>
+
+                                                {/* Step 4 */}
+                                                <div>
+                                                    <h4 className="text-sm font-bold tracking-wide text-neutral-700 uppercase mb-4 font-display">Step 4 &mdash; ふるさと納税</h4>
+                                                    <Row label="住民税所得割額" value={fmtYen(residentIncomeBased)} sub />
+                                                    <Row label="所得税率" value={`${Math.round(getRate(taxableIncomeIncomeTax) * 100)}%`} sub />
+                                                    <Row label="上限額" value={fmtYen(furusatoLimit)} bold border />
+                                                    <p className="text-[11px] text-neutral-400 mt-3 leading-relaxed">
+                                                        住宅ローン控除や医療費控除がある場合、上限額が変動します。
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </section>
+
+                                    <p className="text-[11px] text-neutral-400 leading-relaxed px-2">
+                                        このシミュレーションは概算です。事業所得がある場合の国保計算、分離課税との損益通算等は個別の事情により異なります。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <footer className="mt-16 md:mt-24 pb-8 text-center">
+                            <p className="text-[11px] text-neutral-300 tracking-widest font-display uppercase">Tax Simulator &mdash; 令和8年対応</p>
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+
+        createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
