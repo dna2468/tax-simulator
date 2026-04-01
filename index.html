@@ -352,129 +352,133 @@
                 const today = new Date().toLocaleDateString('ja-JP');
                 const f = (n) => new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(n);
 
-                const pdfRow = (label, value, opts = {}) => {
+                const r = (label, value, opts = {}) => {
                     const { bold, border, indent, dim } = opts;
-                    return `<tr style="${border ? 'border-top:1px solid #d4d4d4;' : ''}">
-                        <td style="padding:${bold ? '6px' : '3px'} 0; ${indent ? 'padding-left:16px;' : ''} font-size:${indent ? '11' : '12'}px; color:${bold ? '#171717' : '#737373'}; font-weight:${bold ? '600' : '400'};">${label}</td>
-                        <td style="padding:${bold ? '6px' : '3px'} 0; text-align:right; font-family:monospace; font-size:12px; color:${dim ? '#a3a3a3' : bold ? '#171717' : '#525252'}; font-weight:${bold ? '700' : '400'};">${value}</td>
-                    </tr>`;
+                    return '<tr' + (border ? ' style="border-top:1px solid #d4d4d4;"' : '') + '>' +
+                        '<td style="padding:' + (bold ? '6' : '3') + 'px 0;' + (indent ? 'padding-left:14px;' : '') +
+                        'font-size:' + (indent ? '10' : '11') + 'px;color:' + (bold ? '#171717' : '#737373') +
+                        ';font-weight:' + (bold ? '600' : '400') + ';">' + label + '</td>' +
+                        '<td style="padding:' + (bold ? '6' : '3') + 'px 0;text-align:right;font-family:Consolas,monospace;font-size:11px;color:' +
+                        (dim ? '#a3a3a3' : bold ? '#171717' : '#525252') + ';font-weight:' + (bold ? '700' : '400') + ';">' + value + '</td></tr>';
+                };
+                const d = (label, val) => val > 0 ? r(label, f(val), { indent: true }) : '';
+
+                const secTitle = (text) => '<tr><td colspan="2" style="font-size:10px;font-weight:700;color:#a3a3a3;letter-spacing:2px;text-transform:uppercase;padding:10px 0 6px 0;border-bottom:1px solid #e5e5e5;">' + text + '</td></tr>';
+
+                // 控除セクション生成
+                const deductionBlock = (title, isR) => {
+                    const basic = isR ? basicDeductionResident : basicDeductionIncome;
+                    const sp = isR ? spouseDeductionResident : spouseDeductionIncome;
+                    const dep = isR ? dependentDeductionResident : dependentDeductionIncome;
+                    const dis = isR ? disabilityDeductionResident : disabilityDeductionIncome;
+                    const spw = isR ? singleParentWidowResident : singleParentWidowIncome;
+                    const ws = isR ? workingStudentResident : workingStudentIncome;
+                    const total = isR ? totalDeductionResident : totalDeductionIncome;
+                    const taxable = isR ? taxableIncomeResidentTax : taxableIncomeIncomeTax;
+                    return secTitle('Step 2 — ' + title + '控除') +
+                        d('基礎控除', basic) + d('社会保険料', socialInsurance) +
+                        d('配偶者控除', sp) + d('扶養控除', dep) + d('障害者控除', dis) +
+                        d('ひとり親・寡婦', spw) + d('勤労学生', ws) + d('iDeCo等', ideco) +
+                        d('生命保険料', lifeInsurance) + d('地震保険料', earthquakeInsurance) +
+                        d('医療費控除', medicalDeduction) + d('雑損控除', casualtyLoss) +
+                        d('寄附金控除', donationDeduction) +
+                        r('控除合計', '-' + f(total), { indent: true, dim: true }) +
+                        r('課税所得', f(taxable), { bold: true, border: true });
                 };
 
-                // 控除行（0でなければ表示）
-                const dRow = (label, val) => val > 0 ? pdfRow(label, f(val), { indent: true }) : '';
+                const html =
+                '<div style="width:680px;font-family:Helvetica,Arial,sans-serif;color:#171717;padding:32px 36px;">' +
+                    // ヘッダー
+                    '<div style="margin-bottom:24px;">' +
+                        '<div style="font-size:9px;letter-spacing:3px;color:#a3a3a3;text-transform:uppercase;margin-bottom:3px;">Tax Simulation Report</div>' +
+                        '<div style="font-size:20px;font-weight:800;margin-bottom:2px;">税金シミュレーション結果</div>' +
+                        '<div style="font-size:10px;color:#a3a3a3;">令和8年分 (2026年) ／ 出力日: ' + today + '</div>' +
+                    '</div>' +
 
-                const html = `
-                <div style="font-family:'Noto Sans JP','Helvetica Neue',sans-serif; color:#171717; padding:40px; max-width:700px; margin:0 auto;">
-                    <div style="margin-bottom:32px;">
-                        <div style="font-size:10px; letter-spacing:3px; color:#a3a3a3; text-transform:uppercase; margin-bottom:4px;">Tax Simulation Report</div>
-                        <div style="font-size:22px; font-weight:800; letter-spacing:-0.5px; margin-bottom:2px;">税金シミュレーション結果</div>
-                        <div style="font-size:11px; color:#a3a3a3;">令和8年分 (2026年) ／ 出力日: ${today}</div>
-                    </div>
+                    // サマリー 2カラム（テーブル）
+                    '<table style="width:100%;border-collapse:separate;border-spacing:12px 0;margin:0 -12px 20px -12px;"><tr>' +
+                        '<td style="width:50%;background:#171717;color:white;border-radius:10px;padding:16px;vertical-align:top;">' +
+                            '<div style="font-size:9px;color:#a3a3a3;margin-bottom:3px;">手取り年収（概算）</div>' +
+                            '<div style="font-size:24px;font-weight:700;font-family:Consolas,monospace;letter-spacing:-1px;">' + f(takeHome) + '</div>' +
+                            '<div style="font-size:10px;color:#737373;font-family:Consolas,monospace;margin-top:3px;">月額 ' + f(Math.round(takeHome / 12)) + '</div>' +
+                        '</td>' +
+                        '<td style="width:50%;border:1px solid #d4d4d4;border-radius:10px;padding:16px;vertical-align:top;">' +
+                            '<div style="font-size:9px;color:#a3a3a3;margin-bottom:3px;">ふるさと納税 限度額目安</div>' +
+                            '<div style="font-size:24px;font-weight:700;font-family:Consolas,monospace;letter-spacing:-1px;">' + f(furusatoLimit) + '</div>' +
+                            '<div style="font-size:10px;color:#a3a3a3;margin-top:3px;">自己負担2,000円で済む上限</div>' +
+                        '</td>' +
+                    '</tr></table>' +
 
-                    <div style="display:flex; gap:16px; margin-bottom:24px;">
-                        <div style="flex:1; background:#171717; color:white; border-radius:12px; padding:20px;">
-                            <div style="font-size:10px; color:#a3a3a3; margin-bottom:4px;">手取り年収（概算）</div>
-                            <div style="font-size:28px; font-weight:700; font-family:monospace; letter-spacing:-1px;">${f(takeHome)}</div>
-                            <div style="font-size:11px; color:#737373; font-family:monospace; margin-top:4px;">月額 ${f(Math.round(takeHome / 12))}</div>
-                        </div>
-                        <div style="flex:1; border:1px solid #d4d4d4; border-radius:12px; padding:20px;">
-                            <div style="font-size:10px; color:#a3a3a3; margin-bottom:4px;">ふるさと納税 限度額目安</div>
-                            <div style="font-size:28px; font-weight:700; font-family:monospace; letter-spacing:-1px;">${f(furusatoLimit)}</div>
-                            <div style="font-size:11px; color:#a3a3a3; margin-top:4px;">自己負担2,000円で済む上限</div>
-                        </div>
-                    </div>
+                    // Breakdown
+                    '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">' +
+                        secTitle('Breakdown — 税金・社会保険料') +
+                        r('社会保険料', f(socialInsurance)) + r('所得税', f(finalIncomeTax)) + r('住民税', f(finalResidentTax)) +
+                        r('負担合計', f(totalTaxBurden), { bold: true, border: true }) +
+                        r('負担率', burdenRate + '%', { bold: true }) +
+                    '</table>' +
 
-                    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
-                        <tr><td colspan="2" style="font-size:11px; font-weight:700; color:#a3a3a3; letter-spacing:2px; text-transform:uppercase; padding-bottom:8px; border-bottom:1px solid #e5e5e5;">Breakdown &mdash; 税金・社会保険料</td></tr>
-                        ${pdfRow('社会保険料', f(socialInsurance))}
-                        ${pdfRow('所得税', f(finalIncomeTax))}
-                        ${pdfRow('住民税', f(finalResidentTax))}
-                        ${pdfRow('負担合計', f(totalTaxBurden), { bold: true, border: true })}
-                        ${pdfRow('負担率', burdenRate + '%', { bold: true })}
-                    </table>
+                    // Step 1
+                    '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">' +
+                        secTitle('Step 1 — 所得の計算') +
+                        r('給与収入', f(salary)) +
+                        r('給与所得控除 + 調整控除', '-' + f(salary - salaryIncome), { indent: true, dim: true }) +
+                        r('給与所得', f(salaryIncome)) +
+                        ((dividendIncome > 0 || businessIncome > 0 || miscIncome > 0) ? r('他所得計', f(dividendIncome + businessIncome + miscIncome)) : '') +
+                        r('総所得金額', f(totalIncome), { bold: true, border: true }) +
+                    '</table>' +
 
-                    <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
-                        <tr><td colspan="2" style="font-size:11px; font-weight:700; color:#a3a3a3; letter-spacing:2px; text-transform:uppercase; padding-bottom:8px; border-bottom:1px solid #e5e5e5;">Step 1 &mdash; 所得の計算</td></tr>
-                        ${pdfRow('給与収入', f(salary))}
-                        ${pdfRow('給与所得控除 + 調整控除', '-' + f(salary - salaryIncome), { indent: true, dim: true })}
-                        ${pdfRow('給与所得', f(salaryIncome))}
-                        ${(dividendIncome > 0 || businessIncome > 0 || miscIncome > 0) ? pdfRow('他所得計', f(dividendIncome + businessIncome + miscIncome)) : ''}
-                        ${pdfRow('総所得金額', f(totalIncome), { bold: true, border: true })}
-                    </table>
+                    // Step 2 — 2カラム
+                    '<table style="width:100%;border-collapse:separate;border-spacing:12px 0;margin:0 -12px 16px -12px;"><tr>' +
+                        '<td style="width:50%;vertical-align:top;"><table style="width:100%;border-collapse:collapse;">' + deductionBlock('所得税', false) + '</table></td>' +
+                        '<td style="width:50%;vertical-align:top;"><table style="width:100%;border-collapse:collapse;">' + deductionBlock('住民税', true) + '</table></td>' +
+                    '</tr></table>' +
 
-                    <div style="display:flex; gap:16px; margin-bottom:20px;">
-                        ${['所得税', '住民税'].map((title, i) => {
-                            const isR = i === 1;
-                            const basic = isR ? basicDeductionResident : basicDeductionIncome;
-                            const sp = isR ? spouseDeductionResident : spouseDeductionIncome;
-                            const dep = isR ? dependentDeductionResident : dependentDeductionIncome;
-                            const dis = isR ? disabilityDeductionResident : disabilityDeductionIncome;
-                            const spw = isR ? singleParentWidowResident : singleParentWidowIncome;
-                            const ws = isR ? workingStudentResident : workingStudentIncome;
-                            const total = isR ? totalDeductionResident : totalDeductionIncome;
-                            const taxable = isR ? taxableIncomeResidentTax : taxableIncomeIncomeTax;
-                            return `<div style="flex:1;"><table style="width:100%; border-collapse:collapse;">
-                                <tr><td colspan="2" style="font-size:11px; font-weight:700; color:#a3a3a3; letter-spacing:2px; text-transform:uppercase; padding-bottom:6px; border-bottom:1px solid #e5e5e5;">Step 2 &mdash; ${title}控除</td></tr>
-                                ${dRow('基礎控除', basic)}
-                                ${dRow('社会保険料', socialInsurance)}
-                                ${dRow('配偶者控除', sp)}
-                                ${dRow('扶養控除', dep)}
-                                ${dRow('障害者控除', dis)}
-                                ${dRow('ひとり親・寡婦', spw)}
-                                ${dRow('勤労学生', ws)}
-                                ${dRow('iDeCo等', ideco)}
-                                ${dRow('生命保険料', lifeInsurance)}
-                                ${dRow('地震保険料', earthquakeInsurance)}
-                                ${dRow('医療費控除', medicalDeduction)}
-                                ${dRow('雑損控除', casualtyLoss)}
-                                ${dRow('寄附金控除', donationDeduction)}
-                                ${pdfRow('控除合計', '-' + f(total), { indent: true, dim: true })}
-                                ${pdfRow('課税所得', f(taxable), { bold: true, border: true })}
-                            </table></div>`;
-                        }).join('')}
-                    </div>
+                    // Step 3 — 2カラム
+                    '<table style="width:100%;border-collapse:separate;border-spacing:12px 0;margin:0 -12px 16px -12px;"><tr>' +
+                        '<td style="width:50%;vertical-align:top;"><table style="width:100%;border-collapse:collapse;">' +
+                            secTitle('Step 3 — 所得税') +
+                            r('税率', Math.round(incomeTaxRate * 100) + '%') +
+                            (dividendIncome > 0 ? r('配当控除', '-' + f(divDeductionIncome), { indent: true, dim: true }) : '') +
+                            r('基準所得税額', f(standardIncomeTax)) +
+                            r('復興特別所得税', '+' + f(reconstructionTax), { indent: true }) +
+                            (housingLoanCredit > 0 ? r('住宅ローン控除', '-' + f(housingLoanUsedIncome), { indent: true, dim: true }) : '') +
+                            r('申告所得税額', f(finalIncomeTax), { bold: true, border: true }) +
+                        '</table></td>' +
+                        '<td style="width:50%;vertical-align:top;"><table style="width:100%;border-collapse:collapse;">' +
+                            secTitle('Step 3 — 住民税') +
+                            r('税率', '10%') +
+                            (dividendIncome > 0 ? r('配当控除', '-' + f(divDeductionResident), { indent: true, dim: true }) : '') +
+                            r('調整控除', '-' + f(adjustmentDeduction), { indent: true, dim: true }) +
+                            (housingLoanResidentCredit > 0 ? r('住宅ローン控除', '-' + f(housingLoanResidentCredit), { indent: true, dim: true }) : '') +
+                            r('所得割額', f(residentIncomeBased)) +
+                            r('均等割額', '+' + f(perCapitaTax), { indent: true }) +
+                            r('住民税額', f(finalResidentTax), { bold: true, border: true }) +
+                        '</table></td>' +
+                    '</tr></table>' +
 
-                    <div style="display:flex; gap:16px; margin-bottom:20px;">
-                        <div style="flex:1;"><table style="width:100%; border-collapse:collapse;">
-                            <tr><td colspan="2" style="font-size:11px; font-weight:700; color:#a3a3a3; letter-spacing:2px; text-transform:uppercase; padding-bottom:6px; border-bottom:1px solid #e5e5e5;">Step 3 &mdash; 所得税</td></tr>
-                            ${pdfRow('税率', Math.round(incomeTaxRate * 100) + '%')}
-                            ${dividendIncome > 0 ? pdfRow('配当控除', '-' + f(divDeductionIncome), { indent: true, dim: true }) : ''}
-                            ${pdfRow('基準所得税額', f(standardIncomeTax))}
-                            ${pdfRow('復興特別所得税', '+' + f(reconstructionTax), { indent: true })}
-                            ${housingLoanCredit > 0 ? pdfRow('住宅ローン控除', '-' + f(housingLoanUsedIncome), { indent: true, dim: true }) : ''}
-                            ${pdfRow('申告所得税額', f(finalIncomeTax), { bold: true, border: true })}
-                        </table></div>
-                        <div style="flex:1;"><table style="width:100%; border-collapse:collapse;">
-                            <tr><td colspan="2" style="font-size:11px; font-weight:700; color:#a3a3a3; letter-spacing:2px; text-transform:uppercase; padding-bottom:6px; border-bottom:1px solid #e5e5e5;">Step 3 &mdash; 住民税</td></tr>
-                            ${pdfRow('税率', '10%')}
-                            ${dividendIncome > 0 ? pdfRow('配当控除', '-' + f(divDeductionResident), { indent: true, dim: true }) : ''}
-                            ${pdfRow('調整控除', '-' + f(adjustmentDeduction), { indent: true, dim: true })}
-                            ${housingLoanResidentCredit > 0 ? pdfRow('住宅ローン控除', '-' + f(housingLoanResidentCredit), { indent: true, dim: true }) : ''}
-                            ${pdfRow('所得割額', f(residentIncomeBased))}
-                            ${pdfRow('均等割額', '+' + f(perCapitaTax), { indent: true })}
-                            ${pdfRow('住民税額', f(finalResidentTax), { bold: true, border: true })}
-                        </table></div>
-                    </div>
-
-                    <div style="font-size:10px; color:#a3a3a3; border-top:1px solid #e5e5e5; padding-top:12px; line-height:1.6;">
-                        本シミュレーションは概算です。実際の税額は個別の事情により異なります。<br/>
-                        Tax Simulator &mdash; 令和8年対応 ／ ${today}
-                    </div>
-                </div>`;
+                    // フッター
+                    '<div style="font-size:9px;color:#a3a3a3;border-top:1px solid #e5e5e5;padding-top:10px;line-height:1.5;">' +
+                        '本シミュレーションは概算です。実際の税額は個別の事情により異なります。<br/>' +
+                        'Tax Simulator — 令和8年対応 ／ ' + today +
+                    '</div>' +
+                '</div>';
 
                 const container = document.createElement('div');
+                container.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;background:white;';
                 container.innerHTML = html;
                 document.body.appendChild(container);
 
-                html2pdf().set({
-                    margin: [10, 10, 10, 10],
-                    filename: '税金シミュレーション_' + new Date().toISOString().slice(0, 10) + '.pdf',
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                    pagebreak: { mode: 'avoid-all' }
-                }).from(container).save().then(() => {
-                    document.body.removeChild(container);
+                requestAnimationFrame(() => {
+                    html2pdf().set({
+                        margin: [8, 5, 8, 5],
+                        filename: '税金シミュレーション_' + new Date().toISOString().slice(0, 10) + '.pdf',
+                        image: { type: 'jpeg', quality: 0.95 },
+                        html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowWidth: 760 },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                        pagebreak: { mode: 'avoid-all' }
+                    }).from(container).save().then(() => {
+                        document.body.removeChild(container);
+                    });
                 });
             };
 
