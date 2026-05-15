@@ -60,6 +60,30 @@
         import { createRoot } from 'react-dom/client';
         import { ChevronDown } from 'lucide-react';
 
+        const fmtNum = (n) => n.toLocaleString();
+
+        const Input = ({ label, value, onChange, sub, type = 'text' }) => {
+            const [focused, setFocused] = useState(false);
+            const [localValue, setLocalValue] = useState('');
+            return (
+                <div className="space-y-1.5">
+                    <label className="block text-xs font-medium tracking-wide text-neutral-500 uppercase">{label}</label>
+                    {type === 'text' ? (
+                        <input type="text" inputMode="numeric"
+                            value={focused ? localValue : fmtNum(value)}
+                            onFocus={() => { setFocused(true); setLocalValue(value === 0 ? '' : String(value)); }}
+                            onChange={(e) => { const raw = e.target.value.replace(/[^0-9]/g, ''); setLocalValue(raw); onChange(raw === '' ? 0 : Number(raw)); }}
+                            onBlur={() => setFocused(false)}
+                            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg text-lg font-mono focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-colors" />
+                    ) : (
+                        <input type="number" min="0" value={value} onChange={(e) => { const v = e.target.value; onChange(v === '' ? 0 : Number(v)); }}
+                            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg font-mono focus:outline-none focus:border-neutral-900 transition-colors" />
+                    )}
+                    {sub && <p className="text-[11px] text-neutral-400">{sub}</p>}
+                </div>
+            );
+        };
+
         const App = () => {
             // --- 収入 ---
             const [salary, setSalary] = useState(6000000);
@@ -459,24 +483,7 @@
 
             // --- Utilities ---
             const fmtYen = (n) => new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(n);
-            const fmtNum = (n) => n.toLocaleString();
-            const onNumeric = (setter) => (e) => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setter(Number(v)); };
             const onNumber = (setter) => (e) => { const v = e.target.value; setter(v === '' ? 0 : Number(v)); };
-
-            // --- UI Components ---
-            const Input = ({ label, value, onChange, sub, type = 'text' }) => (
-                <div className="space-y-1.5">
-                    <label className="block text-xs font-medium tracking-wide text-neutral-500 uppercase">{label}</label>
-                    {type === 'text' ? (
-                        <input type="text" inputMode="numeric" value={fmtNum(value)} onChange={onNumeric(onChange)}
-                            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg text-lg font-mono focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-colors" />
-                    ) : (
-                        <input type="number" min="0" value={value} onChange={onNumber(onChange)}
-                            className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-lg font-mono focus:outline-none focus:border-neutral-900 transition-colors" />
-                    )}
-                    {sub && <p className="text-[11px] text-neutral-400">{sub}</p>}
-                </div>
-            );
 
             const Select = ({ label, value, onChange, options, sub }) => (
                 <div className="space-y-1.5">
