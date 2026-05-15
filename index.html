@@ -385,12 +385,12 @@
                 const f = (n) => new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(n);
 
                 const r = (label, value, bold, dim) =>
-                    `<tr${bold ? ' style="border-top:1px solid #ccc;"' : ''}>
-                        <td style="padding:${bold?5:2}px 0;font-size:${bold?11:10}px;color:${bold?'#111':'#666'};font-weight:${bold?600:400};">${label}</td>
-                        <td style="padding:${bold?5:2}px 0;text-align:right;font-family:Consolas,monospace;font-size:10px;color:${dim?'#aaa':bold?'#111':'#444'};font-weight:${bold?700:400};">${value}</td>
+                    `<tr${bold ? ' style="border-top:1.5px solid #888;"' : ''}>
+                        <td style="padding:${bold?5:2}px 0;font-size:${bold?11:10}px;color:${bold?'#000':'#333'};font-weight:${bold?600:400};">${label}</td>
+                        <td style="padding:${bold?5:2}px 0;text-align:right;font-family:Consolas,monospace;font-size:10px;color:${dim?'#666':bold?'#000':'#222'};font-weight:${bold?700:400};">${value}</td>
                     </tr>`;
                 const d = (label, val) => val > 0 ? r(label, f(val), false, false) : '';
-                const sec = (t) => `<tr><td colspan="2" style="font-size:9px;font-weight:700;color:#999;letter-spacing:2px;text-transform:uppercase;padding:8px 0 4px;border-bottom:1px solid #ddd;">${t}</td></tr>`;
+                const sec = (t) => `<tr><td colspan="2" style="font-size:9px;font-weight:700;color:#555;letter-spacing:2px;text-transform:uppercase;padding:8px 0 4px;border-bottom:1.5px solid #999;">${t}</td></tr>`;
 
                 const deductionRows = (isR) => {
                     const g = (a, b) => isR ? b : a;
@@ -412,21 +412,21 @@
                 el.innerHTML = `
                 <div style="font-family:'Noto Sans JP',Helvetica,Arial,sans-serif;color:#111;padding:24px 28px;max-width:100%;">
                     <div style="margin-bottom:20px;">
-                        <div style="font-size:8px;letter-spacing:3px;color:#aaa;text-transform:uppercase;margin-bottom:2px;">Tax Simulation Report</div>
+                        <div style="font-size:8px;letter-spacing:3px;color:#666;text-transform:uppercase;margin-bottom:2px;">Tax Simulation Report</div>
                         <div style="font-size:18px;font-weight:800;">税金シミュレーション結果</div>
-                        <div style="font-size:9px;color:#aaa;">令和8年分 (2026年) ／ 出力日: ${today}</div>
+                        <div style="font-size:9px;color:#666;">令和8年分 (2026年) ／ 出力日: ${today}</div>
                     </div>
 
                     <table style="width:100%;border-collapse:separate;border-spacing:10px 0;margin:0 -10px 16px -10px;"><tr>
-                        <td style="width:50%;background:#111;color:#fff;border-radius:8px;padding:14px;">
-                            <div style="font-size:8px;color:#999;margin-bottom:2px;">手取り年収（概算）</div>
+                        <td style="width:50%;background:#111;color:#fff;border-radius:8px;padding:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+                            <div style="font-size:8px;color:#ccc;margin-bottom:2px;">手取り年収（概算）</div>
                             <div style="font-size:22px;font-weight:700;font-family:Consolas,monospace;">${f(takeHome)}</div>
-                            <div style="font-size:9px;color:#666;font-family:Consolas,monospace;margin-top:2px;">月額 ${f(Math.round(takeHome / 12))}</div>
+                            <div style="font-size:9px;color:#aaa;font-family:Consolas,monospace;margin-top:2px;">月額 ${f(Math.round(takeHome / 12))}</div>
                         </td>
-                        <td style="width:50%;border:1px solid #ccc;border-radius:8px;padding:14px;">
-                            <div style="font-size:8px;color:#999;margin-bottom:2px;">ふるさと納税 限度額目安</div>
+                        <td style="width:50%;border:1.5px solid #888;border-radius:8px;padding:14px;">
+                            <div style="font-size:8px;color:#555;margin-bottom:2px;">ふるさと納税 限度額目安</div>
                             <div style="font-size:22px;font-weight:700;font-family:Consolas,monospace;">${f(furusatoLimit)}</div>
-                            <div style="font-size:9px;color:#999;margin-top:2px;">自己負担2,000円で済む上限</div>
+                            <div style="font-size:9px;color:#555;margin-top:2px;">自己負担2,000円で済む上限</div>
                         </td>
                     </tr></table>
 
@@ -472,7 +472,7 @@
                         </table></td>
                     </tr></table>
 
-                    <div style="font-size:8px;color:#aaa;border-top:1px solid #ddd;padding-top:8px;line-height:1.5;">
+                    <div style="font-size:8px;color:#555;border-top:1.5px solid #999;padding-top:8px;line-height:1.5;">
                         本シミュレーションは概算です。実際の税額は個別の事情により異なります。<br/>
                         Tax Simulator — 令和8年対応 ／ ${today}
                     </div>
